@@ -1,4 +1,5 @@
 /* eslint-disable no-bitwise */
+// Scaling + Rotation + Tranlation. In that order
 const AXIS = {
   X: 'Axis/X',
   Y: 'Axis/Y',
@@ -18,7 +19,6 @@ function get(url, callback) {
 
     xhr.onreadystatechange = () => {
       if (xhr.readyState === DONE && xhr.status === OK) {
-        console.log('success')
         resolve(xhr.responseText);
       } else if (xhr.status !== 200) {
         reject(xhr.status);
@@ -240,42 +240,6 @@ class EulerMatrix {
   }
 }
 
-class PerspectiveMatrix {
-  constructor(fov, near, far) {
-    this.final = new Matrix();
-
-    const s = 1 / Math.tan( (fov / 2) * (Math.PI / 180) );
-
-    this.final.matrix[0] = s;
-    this.final.matrix[5] = s;
-
-    this.final.matrix[10] = -far / (far - near);
-    this.final.matrix[14] = -far * near / (far - near);
-
-    this.final.matrix[11] = -1;
-    this.final.matrix[15] = 0;
-
-    return this.final;
-  }
-}
-
-
-
-// ----------------------------------------------------- //
-// Scaling + Rotation + Tranlation. In that order
-
-// const tMat = new TranslationMatrix(0, 0, -20);
-// const eMat = new EulerMatrix(degrees(75), degrees(0), degrees(-90));
-// const rMat = new ScalingMatrix(2, 2, 2);
-
-// const tfMatrix = new Matrix()
-//   .multiply(rMat)
-//   .multiply(eMat)
-//   .multiply(tMat);
-
-// const finalTest = tfMatrix.transform(simpleFace);
-// console.log(finalTest);
-
 // ----------------------------------------------------- //
 
 const width = 212 * 2;
@@ -290,13 +254,29 @@ const requestAnimFrame = (
   window.msRequestAnimationFrame ||
   (callback => window.setTimeout(callback, 1000 / 100))
 );
-let currentObject = null;
+const world = [];
 
 let fpsCounterLast = Date.now();
 let fps;
 const fpsElement = document.getElementById('fps');
-const perspectiveMatrix = new PerspectiveMatrix(90, 0.1, 100);
-console.log(perspectiveMatrix);
+
+let logged = false;
+function justOnceLog() {
+  if (logged) return;
+  logged = true;
+  console.log('just once logged:');
+  console.log(...arguments)
+}
+
+let intervalLogTime = true;
+function intervalLog() {
+  if (!intervalLogTime) return;
+  intervalLogTime = false;
+  console.log(...arguments);
+}
+setInterval(() => {
+  intervalLogTime = true;
+}, 718);
 
 function setPixel(xy, rgba) {
   const [r, g, b, a] = rgba;
@@ -336,39 +316,50 @@ function clearScreen() {
   }
 }
 
-function render() {
-  clearScreen();
-
-  const slowRot = new EulerMatrix(degrees(0), degrees(0.25), degrees(0));
-  currentObject.vertices = slowRot.transform(currentObject.vertices);
-
-  const inPerspectiveObject = Object.assign({}, currentObject);
-  inPerspectiveObject.vertices = perspectiveMatrix.transform(currentObject.vertices);
-  
-
-  inPerspectiveObject.faces.forEach(face => {
+function drawFace(obj) {
+  obj.faces.forEach(face => {
     const [ a, b, c ] = [ face[0], face[1], face[2] ];
     const [ vertexA, vertexB, vertexC ] = [
-      inPerspectiveObject.vertices[a],
-      inPerspectiveObject.vertices[b],
-      inPerspectiveObject.vertices[c],
+      obj.vertices[a],
+      obj.vertices[b],
+      obj.vertices[c],
     ];
 
     drawLine(vertexA, vertexB);
     drawLine(vertexB, vertexC);
     drawLine(vertexC, vertexA);
   });
+}
 
-  // let lastLine = null;
-  // currentObject.vertices.forEach(vertex => {
-  //   const xy = vertexToCanvas(vertex, width, heigth);
-    
-  //   // drawLine(lastLine, xy);
-  //   // lastLine = xy;
+function render() {
+  clearScreen();
 
-  //   setPixel(xy, [0, 0, 0, 255]);
-  //   lastLine = xy;
-  // });
+  // rotate world
+  const rotWorldMat = new EulerMatrix(degrees(0), degrees(0.5), degrees(0));
+  world.forEach((item, idx) => {
+    world[idx].vertices = rotWorldMat.transform(item.vertices);
+  });
+
+  // draw world
+  world.forEach(item => {
+    drawFace(item);
+  })
+
+
+  // currentObject.vertices = slowRot.transform(currentObject.vertices);
+
+  // const d = 10;
+  // const inPerspectiveObject = Object.assign({}, currentObject);
+  // inPerspectiveObject.vertices = inPerspectiveObject.vertices.map(vertex => {
+  //   const [ x, y, z, w ] = vertex;
+  //   return [ (x/z)*d, (y/z)*d, d, 1 ];
+  //   // return [ (x/z)*d, (y/z)*d, d, 1 ];
+  // })
+
+  // intervalLog(inPerspectiveObject.vertices.slice(0));
+
+
+  
 }
 
 function clock() {
@@ -378,40 +369,64 @@ function clock() {
   requestAnimFrame(clock);
   ctx.putImageData(pixels, 0, 0);
   render();
-  // ctx.putImageData(pixels, 0, 0);
+}
+
+function safeParse(str) {
+  let json = {};
+  try {
+    json = JSON.parse(str);
+  } catch (error) {
+    json = {};
+  }
+  return json;
+}
+
+function loadModel(filename, translate, rotate=[0,0,0], scale) {
+  return new Promise(resolve => {
+    get(filename).then(res => {
+      const [rotX, rotY, rotZ] = rotate || 0;
+      const cubeJSON = safeParse(res);
+      const normalizedObject = jsonTo3D(cubeJSON);
+  
+      const tMat = new TranslationMatrix(...translate);
+      const eMat = new EulerMatrix(degrees(rotX), degrees(rotY), degrees(rotZ));
+      const rMat = new ScalingMatrix(...scale);
+  
+      const tfMatrix = new Matrix()
+        .multiply(rMat)
+        .multiply(eMat)
+        .multiply(tMat);
+  
+      normalizedObject.vertices = tfMatrix.transform(normalizedObject.vertices);
+      resolve(normalizedObject);
+    });
+  });
 }
 
 function main() {
-  // get('porygon.json').then(res => {
-  get('cube.json').then(res => {
-    let json = {};
-    try {
-      json = JSON.parse(res);
-    } catch (error) {
-      json = {};
-    }
+  // const worldTranslate = new TranslationMatrix(0, 0, 10);
+  loadModel('cube.json', [0,0,0], [0,0,0], [10,10,10]).then(mCube => {
+    world.push(mCube);
 
-    console.log(json);
-    const normalizedObject = jsonTo3D(json);
+    const mCube1 = Object.assign({}, mCube);
+    mCube1.vertices = new TranslationMatrix(-100,-100,0).transform(mCube.vertices);
+    world.push(mCube1);
 
-    const tMat = new TranslationMatrix(0, 0, 0);
-    const eMat = new EulerMatrix(degrees(0), degrees(0), degrees(0));
-    const rMat = new ScalingMatrix(100, 30, 30);
+    console.log(mCube);
 
-    const tfMatrix = new Matrix()
-      .multiply(rMat)
-      .multiply(eMat)
-      .multiply(tMat);
+    const mCube2 = Object.assign({}, mCube);
+    mCube2.vertices = new TranslationMatrix(100,100,0).transform(mCube.vertices);
+    world.push(mCube2);
 
-    normalizedObject.vertices = tfMatrix.transform(normalizedObject.vertices);
-    console.log(normalizedObject);
-    currentObject = normalizedObject;
-
+    // start
     clock();
-    setInterval(() => {
-      fpsElement.innerText = 1 / fps | 0;
-    }, 1000);
+    console.log('started clock')
   });
+
+  // fps timer
+  setInterval(() => {
+    fpsElement.innerText = 1 / fps | 0;
+  }, 1000);
 }
 
 main();
