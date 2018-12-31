@@ -137,7 +137,7 @@ class TranslationMatrix {
     this.final = new Matrix();
 
     this.final.matrix[3] = xAmt;
-    this.final.matrix[7] = yAmt;
+    this.final.matrix[7] = -yAmt;
     this.final.matrix[11] = zAmt;
 
     return this.final;
@@ -244,6 +244,9 @@ class EulerMatrix {
 
 const width = 212 * 2;
 const heigth = 120 * 2;
+const VIEWING_DISTANCE = 200;
+const HITHER_PLANE = 100;
+const YON_PLANE = 200;
 const ctx = document.getElementById('game').getContext('2d');
 const pixels = ctx.createImageData(width, heigth);
 const requestAnimFrame = (
@@ -255,6 +258,7 @@ const requestAnimFrame = (
   (callback => window.setTimeout(callback, 1000 / 100))
 );
 const world = [];
+const worldColor = [];
 
 let fpsCounterLast = Date.now();
 let fps;
@@ -298,12 +302,13 @@ function vertexToCanvas(vertex, canvasWidth, canvasHeight) {
   return [newX, newY];
 }
 
-function drawLine(xy1, xy2) {
+function drawLine(xy1, xy2, color) {
   if (!xy1) return;
 
   const [a, b] = vertexToCanvas(xy1, width, heigth);
   const [c, d] = vertexToCanvas(xy2, width, heigth);
 
+  ctx.strokeStyle = color || '#000000';
   ctx.beginPath();
   ctx.moveTo(a, b);
   ctx.lineTo(c, d);
@@ -316,8 +321,9 @@ function clearScreen() {
   }
 }
 
-function drawFace(obj) {
-  obj.faces.forEach(face => {
+function drawFace(obj, index) {
+  obj.faces.forEach((face, idx) => {
+    let canDraw = true;
     const [ a, b, c ] = [ face[0], face[1], face[2] ];
     const [ vertexA, vertexB, vertexC ] = [
       obj.vertices[a],
@@ -325,50 +331,28 @@ function drawFace(obj) {
       obj.vertices[c],
     ];
 
-    drawLine(vertexA, vertexB);
-    drawLine(vertexB, vertexC);
-    drawLine(vertexC, vertexA);
+
+    // only draw if within viewing cone
+    // ;[ vertexA, vertexB, vertexC ].forEach(vertex => {
+    //   if (vertex[0] > 200) canDraw = false;
+    //   else if (vertex[0] < -200) canDraw = false;
+
+    //   else if (vertex[1] > 200) canDraw = false;
+    //   else if (vertex[1] < -200) canDraw = false;
+
+    //   else if (vertex[2] > YON_PLANE) canDraw = false;
+    //   else if (vertex[2] < HITHER_PLANE) canDraw = false;
+    // });
+
+    // intervalLog((width*vertexA[2]) / (2 * VIEWING_DISTANCE));
+    // if (!( vertexA[0] < (width*vertexA[2]) / (2 * VIEWING_DISTANCE) )) return;
+
+    const color = worldColor[index];
+    if (!canDraw) return;
+    drawLine(vertexA, vertexB, color);
+    drawLine(vertexB, vertexC, color);
+    drawLine(vertexC, vertexA, color);
   });
-}
-
-function render() {
-  clearScreen();
-
-  // rotate world
-  const rotWorldMat = new EulerMatrix(degrees(0), degrees(0.5), degrees(0));
-  world.forEach((item, idx) => {
-    world[idx].vertices = rotWorldMat.transform(item.vertices);
-  });
-
-  // draw world
-  world.forEach(item => {
-    drawFace(item);
-  })
-
-
-  // currentObject.vertices = slowRot.transform(currentObject.vertices);
-
-  // const d = 10;
-  // const inPerspectiveObject = Object.assign({}, currentObject);
-  // inPerspectiveObject.vertices = inPerspectiveObject.vertices.map(vertex => {
-  //   const [ x, y, z, w ] = vertex;
-  //   return [ (x/z)*d, (y/z)*d, d, 1 ];
-  //   // return [ (x/z)*d, (y/z)*d, d, 1 ];
-  // })
-
-  // intervalLog(inPerspectiveObject.vertices.slice(0));
-
-
-  
-}
-
-function clock() {
-  fps = (Date.now() - fpsCounterLast) / 1000;
-  fpsCounterLast = Date.now();
-  
-  requestAnimFrame(clock);
-  ctx.putImageData(pixels, 0, 0);
-  render();
 }
 
 function safeParse(str) {
@@ -403,20 +387,72 @@ function loadModel(filename, translate, rotate=[0,0,0], scale) {
   });
 }
 
+function render() {
+  clearScreen();
+
+  const d = VIEWING_DISTANCE;
+  const rotWorldMat = new EulerMatrix(degrees(0), degrees(0.4), degrees(0));
+  const moveWorldMat = new TranslationMatrix(0,0,1);
+  
+  // rotate world
+  world.forEach((item, idx) => {
+    world[idx].vertices = rotWorldMat.transform(item.vertices);
+  });
+
+  // translate world
+  // const finalWorld = world.slice(0);
+  // finalWorld.forEach((item, idx) => {
+  //   finalWorld[idx].vertices = moveWorldMat.transform(finalWorld[idx].vertices);
+
+  //   // perspective
+  //   finalWorld[idx].vertices = finalWorld[idx].vertices.map(vertex => {
+  //     const [ x, y, z, w ] = vertex;
+  //     return [ x*d/z, y*d/z, d, 1];
+  //   });
+  // });
+
+  // draw world
+  world.forEach((item, idx) => {
+    drawFace(item, idx);
+  })
+}
+
+function clock() {
+  // fps counter
+  fps = (Date.now() - fpsCounterLast) / 1000;
+  fpsCounterLast = Date.now();
+  
+  // wait for ready. put image then restart
+  requestAnimFrame(clock);
+  ctx.putImageData(pixels, 0, 0);
+  render();
+}
+
 function main() {
-  // const worldTranslate = new TranslationMatrix(0, 0, 10);
   loadModel('cube.json', [0,0,0], [0,0,0], [10,10,10]).then(mCube => {
     world.push(mCube);
+    worldColor.push('#f00');
 
     const mCube1 = Object.assign({}, mCube);
-    mCube1.vertices = new TranslationMatrix(-100,-100,0).transform(mCube.vertices);
+    mCube1.vertices = new TranslationMatrix(100,0,0).transform(mCube.vertices);
     world.push(mCube1);
-
-    console.log(mCube);
+    worldColor.push('#0f0');
 
     const mCube2 = Object.assign({}, mCube);
-    mCube2.vertices = new TranslationMatrix(100,100,0).transform(mCube.vertices);
+    mCube2.vertices = new TranslationMatrix(0,100,0).transform(mCube.vertices);
     world.push(mCube2);
+    worldColor.push('#00f');
+
+    const mCube3 = Object.assign({}, mCube);
+    mCube3.vertices = new TranslationMatrix(0,0,100).transform(mCube.vertices);
+    world.push(mCube3);
+    worldColor.push('#0ff');
+
+    // move world
+    // const moveWorld = new TranslationMatrix(100,0,0);
+    // world.forEach((item, idx) => {
+    //   world[idx].vertices = moveWorld.transform(item.vertices);
+    // });
 
     // start
     clock();
