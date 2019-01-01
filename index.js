@@ -365,6 +365,25 @@ function safeParse(str) {
   return json;
 }
 
+function cloneWorld(worldArr) {
+  const clone = [];
+
+  worldArr.forEach(item => {
+    const cloneItem = {};
+    cloneItem.faces = item.faces.slice(0); // shallow copy. We don't need deep copy of faces
+    cloneItem.vertices = [];
+
+    item.vertices.forEach(vertice => {
+      const cloneVertice = vertice.slice(0);
+      cloneItem.vertices.push(cloneVertice);
+    });
+
+    clone.push(cloneItem);
+  });
+
+  return clone;
+}
+
 function loadModel(filename, translate, rotate=[0,0,0], scale) {
   return new Promise(resolve => {
     get(filename).then(res => {
@@ -390,29 +409,35 @@ function loadModel(filename, translate, rotate=[0,0,0], scale) {
 function render() {
   clearScreen();
 
-  const d = VIEWING_DISTANCE;
-  const rotWorldMat = new EulerMatrix(degrees(0), degrees(0.4), degrees(0));
-  const moveWorldMat = new TranslationMatrix(0,0,1);
-  
+
+  // ----------------- world space ----------------- //
   // rotate world
+  const rotWorldMat = new EulerMatrix(degrees(0), degrees(0.2), degrees(0));
   world.forEach((item, idx) => {
     world[idx].vertices = rotWorldMat.transform(item.vertices);
   });
 
-  // translate world
-  // const finalWorld = world.slice(0);
-  // finalWorld.forEach((item, idx) => {
-  //   finalWorld[idx].vertices = moveWorldMat.transform(finalWorld[idx].vertices);
+  const renderWorld = cloneWorld(world);
 
-  //   // perspective
-  //   finalWorld[idx].vertices = finalWorld[idx].vertices.map(vertex => {
-  //     const [ x, y, z, w ] = vertex;
-  //     return [ x*d/z, y*d/z, d, 1];
-  //   });
-  // });
+  // ----------------- camera space ----------------- //
+  // move world
+  const moveWorld = new TranslationMatrix(0,0,200);
+  renderWorld.forEach((item, idx) => {
+    renderWorld[idx].vertices = moveWorld.transform(item.vertices);
+  });
+  
+  // perspective
+  renderWorld.forEach((item, idx) => {
+    renderWorld[idx].vertices = renderWorld[idx].vertices.map(vertex => {
+      const [ x, y, z, w ] = vertex;
+      const d = VIEWING_DISTANCE;
+
+      return [ x*d/z, y*d/z, d, 1];
+    });
+  });
 
   // draw world
-  world.forEach((item, idx) => {
+  renderWorld.forEach((item, idx) => {
     drawFace(item, idx);
   })
 }
@@ -448,8 +473,15 @@ function main() {
     world.push(mCube3);
     worldColor.push('#0ff');
 
-    // move world
-    // const moveWorld = new TranslationMatrix(100,0,0);
+    // // ----------------- world space ----------------- //
+    // // rotate world
+    // const rotWorldMat = new EulerMatrix(degrees(0), degrees(-45), degrees(0));
+    // world.forEach((item, idx) => {
+    //   world[idx].vertices = rotWorldMat.transform(item.vertices);
+    // });
+
+    // // move world
+    // const moveWorld = new TranslationMatrix(0,0,100);
     // world.forEach((item, idx) => {
     //   world[idx].vertices = moveWorld.transform(item.vertices);
     // });
