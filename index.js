@@ -245,8 +245,8 @@ class EulerMatrix {
 const width = 212 * 2;
 const heigth = 120 * 2;
 const VIEWING_DISTANCE = 200;
-const HITHER_PLANE = 100;
-const YON_PLANE = 200;
+const HITHER_PLANE = 10;
+const YON_PLANE = 400;
 const ctx = document.getElementById('game').getContext('2d');
 const pixels = ctx.createImageData(width, heigth);
 const requestAnimFrame = (
@@ -333,16 +333,22 @@ function drawFace(obj, index) {
 
 
     // only draw if within viewing cone
-    // ;[ vertexA, vertexB, vertexC ].forEach(vertex => {
-    //   if (vertex[0] > 200) canDraw = false;
-    //   else if (vertex[0] < -200) canDraw = false;
+    ;[ vertexA, vertexB, vertexC ].forEach(vertex => {
+      const frustrumWidth = (width*vertexA[2]) / ( 0.5 * VIEWING_DISTANCE);
+      const frustrumHeight = (heigth*vertex[2]) / ( 1.5 * VIEWING_DISTANCE);
 
-    //   else if (vertex[1] > 200) canDraw = false;
-    //   else if (vertex[1] < -200) canDraw = false;
+      intervalLog(frustrumHeight);
+      if (vertex[0] > frustrumWidth) canDraw = false;
+      else if (vertex[0] < -frustrumWidth) canDraw = false;
 
-    //   else if (vertex[2] > YON_PLANE) canDraw = false;
-    //   else if (vertex[2] < HITHER_PLANE) canDraw = false;
-    // });
+      else if (vertex[1] > frustrumHeight) canDraw = false;
+      else if (vertex[1] < -frustrumHeight) canDraw = false;
+
+      else if (vertex[2] > YON_PLANE) canDraw = false;
+      else if (vertex[2] < HITHER_PLANE) canDraw = false;
+
+      // intervalLog(vertex[2])
+    });
 
     // intervalLog((width*vertexA[2]) / (2 * VIEWING_DISTANCE));
     // if (!( vertexA[0] < (width*vertexA[2]) / (2 * VIEWING_DISTANCE) )) return;
@@ -412,7 +418,7 @@ function render() {
 
   // ----------------- world space ----------------- //
   // rotate world
-  const rotWorldMat = new EulerMatrix(degrees(0), degrees(0.2), degrees(0));
+  const rotWorldMat = new EulerMatrix(degrees(0), degrees(0.4), degrees(0));
   world.forEach((item, idx) => {
     world[idx].vertices = rotWorldMat.transform(item.vertices);
   });
@@ -421,7 +427,7 @@ function render() {
 
   // ----------------- camera space ----------------- //
   // move world
-  const moveWorld = new TranslationMatrix(0,0,200);
+  const moveWorld = new TranslationMatrix(0,0,180); // 180
   renderWorld.forEach((item, idx) => {
     renderWorld[idx].vertices = moveWorld.transform(item.vertices);
   });
@@ -432,7 +438,7 @@ function render() {
       const [ x, y, z, w ] = vertex;
       const d = VIEWING_DISTANCE;
 
-      return [ x*d/z, y*d/z, d, 1];
+      return [ x*d/z, y*d/z, z, 1];
     });
   });
 
