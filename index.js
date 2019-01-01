@@ -1,52 +1,28 @@
+'use strict'; // eslint-disable-line
+
 /* eslint-disable no-bitwise */
 // Scaling + Rotation + Tranlation. In that order
-const AXIS = {
-  X: 'Axis/X',
-  Y: 'Axis/Y',
-  Z: 'Axis/Z',
+let fpsCounterLast = Date.now();
+let fps;
+const fpsElement = document.getElementById('fps');
+
+let logged = false;
+function justOnceLog() {
+  if (logged) return;
+  logged = true;
+  console.log('just once logged:');
+  console.log(...arguments)
 }
 
-const degrees = degrees => degrees * Math.PI / 180; // converts to rads
-
-function get(url, callback) {
-  return new Promise((resolve, reject) => {
-    const xhr = new XMLHttpRequest();
-    const DONE = 4; // readyState 4 means the request is done.
-    const OK = 200; // status 200 is a successful return.
-
-    xhr.open('GET', url);
-    xhr.send(null);
-
-    xhr.onreadystatechange = () => {
-      if (xhr.readyState === DONE && xhr.status === OK) {
-        resolve(xhr.responseText);
-      } else if (xhr.status !== 200) {
-        reject(xhr.status);
-      }
-    }
-  });
-};
-
-function jsonTo3D(jsonObj) {
-  const oldVertices = jsonObj.meshes[0].vertices;
-  const oldFaces = jsonObj.meshes[0].faces;
-  const newVertices = [];
-  const out = {};
-
-  // refactor old vert format to new
-  for (let i = 0; i < oldVertices.length; i += 3) {
-    newVertices.push([
-      oldVertices[i],
-      oldVertices[i + 1],
-      oldVertices[i + 2],
-      1,
-    ]);
-  }
-
-  out.vertices = newVertices;
-  out.faces = oldFaces;
-  return out;
+let intervalLogTime = true;
+function intervalLog() {
+  if (!intervalLogTime) return;
+  intervalLogTime = false;
+  console.log(...arguments);
 }
+setInterval(() => {
+  intervalLogTime = true;
+}, 718);
 
 // ----------------------------------------------------- //
 
@@ -245,10 +221,17 @@ class EulerMatrix {
 const width = 212 * 2;
 const heigth = 120 * 2;
 const VIEWING_DISTANCE = 200;
-const HITHER_PLANE = 10;
+const HITHER_PLANE = 0.1;
 const YON_PLANE = 400;
+const world = [];
+const worldColor = [];
 const ctx = document.getElementById('game').getContext('2d');
 const pixels = ctx.createImageData(width, heigth);
+const AXIS = {
+  X: 'Axis/X',
+  Y: 'Axis/Y',
+  Z: 'Axis/Z',
+}
 const requestAnimFrame = (
   window.requestAnimationFrame ||
   window.webkitRequestAnimationFrame ||
@@ -257,30 +240,50 @@ const requestAnimFrame = (
   window.msRequestAnimationFrame ||
   (callback => window.setTimeout(callback, 1000 / 100))
 );
-const world = [];
-const worldColor = [];
 
-let fpsCounterLast = Date.now();
-let fps;
-const fpsElement = document.getElementById('fps');
-
-let logged = false;
-function justOnceLog() {
-  if (logged) return;
-  logged = true;
-  console.log('just once logged:');
-  console.log(...arguments)
+function degrees(degrees) {
+  return degrees * Math.PI / 180; // converts to rads
 }
 
-let intervalLogTime = true;
-function intervalLog() {
-  if (!intervalLogTime) return;
-  intervalLogTime = false;
-  console.log(...arguments);
+function get(url, callback) {
+  return new Promise((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    const DONE = 4; // readyState 4 means the request is done.
+    const OK = 200; // status 200 is a successful return.
+
+    xhr.open('GET', url);
+    xhr.send(null);
+
+    xhr.onreadystatechange = () => {
+      if (xhr.readyState === DONE && xhr.status === OK) {
+        resolve(xhr.responseText);
+      } else if (xhr.status !== 200) {
+        reject(xhr.status);
+      }
+    }
+  });
+};
+
+function jsonTo3D(jsonObj) {
+  const oldVertices = jsonObj.meshes[0].vertices;
+  const oldFaces = jsonObj.meshes[0].faces;
+  const newVertices = [];
+  const out = {};
+
+  // refactor old vert format to new
+  for (let i = 0; i < oldVertices.length; i += 3) {
+    newVertices.push([
+      oldVertices[i],
+      oldVertices[i + 1],
+      oldVertices[i + 2],
+      1,
+    ]);
+  }
+
+  out.vertices = newVertices;
+  out.faces = oldFaces;
+  return out;
 }
-setInterval(() => {
-  intervalLogTime = true;
-}, 718);
 
 function setPixel(xy, rgba) {
   const [r, g, b, a] = rgba;
@@ -322,7 +325,7 @@ function clearScreen() {
 }
 
 function drawFace(obj, index) {
-  obj.faces.forEach((face, idx) => {
+  obj.faces.forEach(face => {
     let canDraw = true;
     const [ a, b, c ] = [ face[0], face[1], face[2] ];
     const [ vertexA, vertexB, vertexC ] = [
@@ -332,12 +335,11 @@ function drawFace(obj, index) {
     ];
 
 
-    // only draw if within viewing cone
+    // only draw if within the frustrum
     ;[ vertexA, vertexB, vertexC ].forEach(vertex => {
       const frustrumWidth = (width*vertexA[2]) / ( 0.5 * VIEWING_DISTANCE);
       const frustrumHeight = (heigth*vertex[2]) / ( 1.5 * VIEWING_DISTANCE);
 
-      intervalLog(frustrumHeight);
       if (vertex[0] > frustrumWidth) canDraw = false;
       else if (vertex[0] < -frustrumWidth) canDraw = false;
 
@@ -346,12 +348,7 @@ function drawFace(obj, index) {
 
       else if (vertex[2] > YON_PLANE) canDraw = false;
       else if (vertex[2] < HITHER_PLANE) canDraw = false;
-
-      // intervalLog(vertex[2])
     });
-
-    // intervalLog((width*vertexA[2]) / (2 * VIEWING_DISTANCE));
-    // if (!( vertexA[0] < (width*vertexA[2]) / (2 * VIEWING_DISTANCE) )) return;
 
     const color = worldColor[index];
     if (!canDraw) return;
@@ -461,8 +458,8 @@ function clock() {
 
 function main() {
   loadModel('cube.json', [0,0,0], [0,0,0], [10,10,10]).then(mCube => {
-    world.push(mCube);
-    worldColor.push('#f00');
+    // world.push(mCube);
+    // worldColor.push('#f00');
 
     const mCube1 = Object.assign({}, mCube);
     mCube1.vertices = new TranslationMatrix(100,0,0).transform(mCube.vertices);
@@ -479,22 +476,19 @@ function main() {
     world.push(mCube3);
     worldColor.push('#0ff');
 
-    // // ----------------- world space ----------------- //
-    // // rotate world
-    // const rotWorldMat = new EulerMatrix(degrees(0), degrees(-45), degrees(0));
-    // world.forEach((item, idx) => {
-    //   world[idx].vertices = rotWorldMat.transform(item.vertices);
-    // });
-
-    // // move world
-    // const moveWorld = new TranslationMatrix(0,0,100);
-    // world.forEach((item, idx) => {
-    //   world[idx].vertices = moveWorld.transform(item.vertices);
-    // });
+    const mCube4 = Object.assign({}, mCube);
+    mCube4.vertices = new TranslationMatrix(0,-100,0).transform(mCube.vertices);
+    world.push(mCube4);
+    worldColor.push('#f00');
 
     // start
     clock();
     console.log('started clock')
+  });
+
+  loadModel('porygon.json', [0,0,-10], [90,0,180], [1,1,1]).then(mPorygon => {
+    world.push(mPorygon);
+    worldColor.push('#a7f');
   });
 
   // fps timer
