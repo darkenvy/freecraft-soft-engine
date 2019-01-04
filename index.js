@@ -353,38 +353,44 @@ function rotatePoint(xy, degrees) {
 function drawFace(obj, index) {
   obj.faces.forEach(face => {
     let canDraw = true;
-    const [ a, b, c ] = [ face[0], face[1], face[2] ];
-    const [ vertexA, vertexB, vertexC ] = [
+    const [ a, b, c, d ] = [ face[0], face[1], face[2], face[3] ];
+    const [ vertexA, vertexB, vertexC, vertexD ] = [
       obj.vertices[a],
       obj.vertices[b],
       obj.vertices[c],
+      obj.vertices[d],
     ];
 
     // --------------- Cull back facing --------------- //
     // determine if face is drawn clockwise or counter-clockwise. //
 
     // get the arctangent of vertexA+VertexB.
-    const angleAB = angle(vertexA, vertexB);
-    // const newVertexC = rotatePoint(vertexC, angleAB);
-
-    const ang = angleAB;
-    const newA = rotatePoint(vertexA, ang);
-    const newB = rotatePoint(vertexB, ang);
-    const newC = rotatePoint(vertexC, ang);
-    // drawLine(newA, newB, '#ff0000');
-    // drawLine(newB, newC, '#ffff00');
-    // drawLine(newC, newA, '#ffffff');
+    let angleAB = angle(vertexA, vertexB);
 
     // rotate vertexC by the angle of vertexA/B
-    // const e = rotatePoint(vertexC, 10);
-    // if (e[0] > vertexB[0]) canDraw = false;
-    // drawLine(vertexA, e);
-    // if (newC[0] < newA[0]) canDraw = false;
+    let newA = rotatePoint(vertexA, angleAB);
+    let newB = rotatePoint(vertexB, angleAB);
+    
+    if (newB[1] > newA[1]) {
+      // add additional 180 turn around. recalc newA/newB
+      angleAB += 180;
+      newA = rotatePoint(vertexA, angleAB);
+      newB = rotatePoint(vertexB, angleAB);
+    }
+
+    const newC = rotatePoint(vertexC, angleAB);
+    const newD = rotatePoint(vertexD, angleAB);
+    // drawLine(newA, newB, '#ff0000');
+    // drawLine(newB, newC, '#ff7700');
+    // drawLine(newC, newD, '#ffff00');
+    // drawLine(newD, newA, '#ffffff');
 
     // check if vertexC is right or left (which determines of clock/anticlockwise)
+    // only draw if to the right.
+    if (newC[0] < newA[0]) canDraw = false;
 
     // ------- only draw if within the frustrum ------- //
-    ;[ vertexA, vertexB, vertexC ].forEach(vertex => {
+    ;[ vertexA, vertexB, vertexC, vertexD ].forEach(vertex => {
       const frustrumWidth = (width*vertexA[2]) / ( 0.5 * VIEWING_DISTANCE);
       const frustrumHeight = (heigth*vertex[2]) / ( 1.5 * VIEWING_DISTANCE);
 
@@ -399,11 +405,19 @@ function drawFace(obj, index) {
     });
 
     // -------------- perform draw ------------------- //
-    const color = worldColor[index];
+    // const color = worldColor[index];
+    let color = '#0000ff'
+    if (newA[0] < newC[0]) color = '#ff0000'
     if (!canDraw) return;
+    
+    // drawLine(vertexA, vertexB, color);
+    // drawLine(vertexB, vertexC, color);
+    // drawLine(vertexC, vertexD, color);
+    // drawLine(vertexD, vertexA, color);
     drawLine(vertexA, vertexB, '#ff0000');
     drawLine(vertexB, vertexC, '#ff7700');
-    drawLine(vertexC, vertexA, '#ffff00');
+    drawLine(vertexC, vertexD, '#ffff00');
+    drawLine(vertexD, vertexA, '#ffffff');
   });
 }
 
@@ -464,7 +478,7 @@ function render() {
 
   // ----------------- world space ----------------- //
   // rotate world
-  const rotWorldMat = new EulerMatrix(radians(0), radians(0.1), radians(0));
+  const rotWorldMat = new EulerMatrix(radians(0), radians(1), radians(0));
   world.forEach((item, idx) => {
     world[idx].vertices = rotWorldMat.transform(item.vertices);
   });
@@ -506,39 +520,40 @@ function clock() {
 }
 
 function main() {
+  // loadModel('explode-cube.json', [0,0,0], [0,0,0], [10,10,10]).then(mCube => {
+  //   world.push(mCube);
+  //   worldColor.push('#70ff70');
+  // });
   loadModel('cube.json', [0,0,0], [0,0,0], [10,10,10]).then(mCube => {
-    // world.push(mCube);
-    // worldColor.push('#f00');
+    world.push(mCube);
+    worldColor.push('#f00');
+    console.log(mCube)
 
     const mCube1 = Object.assign({}, mCube);
     mCube1.vertices = new TranslationMatrix(100,0,0).transform(mCube.vertices);
     world.push(mCube1);
     worldColor.push('#0f0');
 
-    // const mCube2 = Object.assign({}, mCube);
-    // mCube2.vertices = new TranslationMatrix(0,100,0).transform(mCube.vertices);
-    // world.push(mCube2);
-    // worldColor.push('#00f');
+    const mCube2 = Object.assign({}, mCube);
+    mCube2.vertices = new TranslationMatrix(0,100,0).transform(mCube.vertices);
+    world.push(mCube2);
+    worldColor.push('#00f');
 
-    // const mCube3 = Object.assign({}, mCube);
-    // mCube3.vertices = new TranslationMatrix(0,0,100).transform(mCube.vertices);
-    // world.push(mCube3);
-    // worldColor.push('#0ff');
+    const mCube3 = Object.assign({}, mCube);
+    mCube3.vertices = new TranslationMatrix(0,0,100).transform(mCube.vertices);
+    world.push(mCube3);
+    worldColor.push('#0ff');
 
-    // const mCube4 = Object.assign({}, mCube);
-    // mCube4.vertices = new TranslationMatrix(0,-100,0).transform(mCube.vertices);
-    // world.push(mCube4);
-    // worldColor.push('#f00');
+    const mCube4 = Object.assign({}, mCube);
+    mCube4.vertices = new TranslationMatrix(0,-100,0).transform(mCube.vertices);
+    world.push(mCube4);
+    worldColor.push('#ff0');
 
     // start
-    clock();
-    console.log('started clock')
   });
-
-  // loadModel('porygon.json', [0,0,-10], [90,0,180], [1,1,1]).then(mPorygon => {
-  //   world.push(mPorygon);
-  //   worldColor.push('#a7f');
-  // });
+  
+  clock();
+  console.log('started clock');
 
   // fps timer
   setInterval(() => {
