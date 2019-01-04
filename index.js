@@ -221,7 +221,7 @@ class EulerMatrix {
 const width = 212 * 2;
 const heigth = 120 * 2;
 const VIEWING_DISTANCE = 200;
-const HITHER_PLANE = 0.1;
+const HITHER_PLANE = 5;
 const YON_PLANE = 400;
 const world = [];
 const worldColor = [];
@@ -241,7 +241,7 @@ const requestAnimFrame = (
   (callback => window.setTimeout(callback, 1000 / 100))
 );
 
-function degrees(degrees) {
+function radians(degrees) {
   return degrees * Math.PI / 180; // converts to rads
 }
 
@@ -324,6 +324,32 @@ function clearScreen() {
   }
 }
 
+function angle(xy1, xy2) {
+  const [ aX, aY, bX, bY ] = [ xy1[0], xy1[1], xy2[0], xy2[1] ];
+  const xDelta = aX - bX;
+  const yDelta = aY - bY;
+  let theta = Math.atan(xDelta / yDelta);
+  theta *= 180/Math.PI;
+  return theta || 0;
+}
+
+function rotatePoint(xy, degrees) {
+  const x = xy[0];
+  const y = xy[1];
+  const rads = radians(degrees);
+
+  const cos = Math.cos(rads);
+  const sin = Math.sin(rads);
+
+  const newX = (x * cos) - (y * sin);
+  const newY = (y * cos + (x * sin));
+
+  return [
+    newX,
+    newY,
+  ];
+}
+
 function drawFace(obj, index) {
   obj.faces.forEach(face => {
     let canDraw = true;
@@ -334,8 +360,30 @@ function drawFace(obj, index) {
       obj.vertices[c],
     ];
 
+    // --------------- Cull back facing --------------- //
+    // determine if face is drawn clockwise or counter-clockwise. //
 
-    // only draw if within the frustrum
+    // get the arctangent of vertexA+VertexB.
+    const angleAB = angle(vertexA, vertexB);
+    // const newVertexC = rotatePoint(vertexC, angleAB);
+
+    const ang = angleAB;
+    const newA = rotatePoint(vertexA, ang);
+    const newB = rotatePoint(vertexB, ang);
+    const newC = rotatePoint(vertexC, ang);
+    // drawLine(newA, newB, '#ff0000');
+    // drawLine(newB, newC, '#ffff00');
+    // drawLine(newC, newA, '#ffffff');
+
+    // rotate vertexC by the angle of vertexA/B
+    // const e = rotatePoint(vertexC, 10);
+    // if (e[0] > vertexB[0]) canDraw = false;
+    // drawLine(vertexA, e);
+    // if (newC[0] < newA[0]) canDraw = false;
+
+    // check if vertexC is right or left (which determines of clock/anticlockwise)
+
+    // ------- only draw if within the frustrum ------- //
     ;[ vertexA, vertexB, vertexC ].forEach(vertex => {
       const frustrumWidth = (width*vertexA[2]) / ( 0.5 * VIEWING_DISTANCE);
       const frustrumHeight = (heigth*vertex[2]) / ( 1.5 * VIEWING_DISTANCE);
@@ -350,11 +398,12 @@ function drawFace(obj, index) {
       else if (vertex[2] < HITHER_PLANE) canDraw = false;
     });
 
+    // -------------- perform draw ------------------- //
     const color = worldColor[index];
     if (!canDraw) return;
-    drawLine(vertexA, vertexB, color);
-    drawLine(vertexB, vertexC, color);
-    drawLine(vertexC, vertexA, color);
+    drawLine(vertexA, vertexB, '#ff0000');
+    drawLine(vertexB, vertexC, '#ff7700');
+    drawLine(vertexC, vertexA, '#ffff00');
   });
 }
 
@@ -395,7 +444,7 @@ function loadModel(filename, translate, rotate=[0,0,0], scale) {
       const normalizedObject = jsonTo3D(cubeJSON);
   
       const tMat = new TranslationMatrix(...translate);
-      const eMat = new EulerMatrix(degrees(rotX), degrees(rotY), degrees(rotZ));
+      const eMat = new EulerMatrix(radians(rotX), radians(rotY), radians(rotZ));
       const rMat = new ScalingMatrix(...scale);
   
       const tfMatrix = new Matrix()
@@ -415,7 +464,7 @@ function render() {
 
   // ----------------- world space ----------------- //
   // rotate world
-  const rotWorldMat = new EulerMatrix(degrees(0), degrees(0.4), degrees(0));
+  const rotWorldMat = new EulerMatrix(radians(0), radians(0.1), radians(0));
   world.forEach((item, idx) => {
     world[idx].vertices = rotWorldMat.transform(item.vertices);
   });
@@ -466,30 +515,30 @@ function main() {
     world.push(mCube1);
     worldColor.push('#0f0');
 
-    const mCube2 = Object.assign({}, mCube);
-    mCube2.vertices = new TranslationMatrix(0,100,0).transform(mCube.vertices);
-    world.push(mCube2);
-    worldColor.push('#00f');
+    // const mCube2 = Object.assign({}, mCube);
+    // mCube2.vertices = new TranslationMatrix(0,100,0).transform(mCube.vertices);
+    // world.push(mCube2);
+    // worldColor.push('#00f');
 
-    const mCube3 = Object.assign({}, mCube);
-    mCube3.vertices = new TranslationMatrix(0,0,100).transform(mCube.vertices);
-    world.push(mCube3);
-    worldColor.push('#0ff');
+    // const mCube3 = Object.assign({}, mCube);
+    // mCube3.vertices = new TranslationMatrix(0,0,100).transform(mCube.vertices);
+    // world.push(mCube3);
+    // worldColor.push('#0ff');
 
-    const mCube4 = Object.assign({}, mCube);
-    mCube4.vertices = new TranslationMatrix(0,-100,0).transform(mCube.vertices);
-    world.push(mCube4);
-    worldColor.push('#f00');
+    // const mCube4 = Object.assign({}, mCube);
+    // mCube4.vertices = new TranslationMatrix(0,-100,0).transform(mCube.vertices);
+    // world.push(mCube4);
+    // worldColor.push('#f00');
 
     // start
     clock();
     console.log('started clock')
   });
 
-  loadModel('porygon.json', [0,0,-10], [90,0,180], [1,1,1]).then(mPorygon => {
-    world.push(mPorygon);
-    worldColor.push('#a7f');
-  });
+  // loadModel('porygon.json', [0,0,-10], [90,0,180], [1,1,1]).then(mPorygon => {
+  //   world.push(mPorygon);
+  //   worldColor.push('#a7f');
+  // });
 
   // fps timer
   setInterval(() => {
