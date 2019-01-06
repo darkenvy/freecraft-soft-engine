@@ -22,7 +22,7 @@ function intervalLog() {
 }
 setInterval(() => {
   intervalLogTime = true;
-}, 718);
+}, 1718);
 
 // ----------------------------------------------------- //
 
@@ -224,7 +224,6 @@ const VIEWING_DISTANCE = 200;
 const HITHER_PLANE = 5;
 const YON_PLANE = 400;
 const world = [];
-const worldColor = [];
 const ctx = document.getElementById('game').getContext('2d');
 const pixels = ctx.createImageData(width, heigth);
 const AXIS = {
@@ -350,7 +349,136 @@ function rotatePoint(xy, degrees) {
   ];
 }
 
-function drawFace(obj, index) {
+// -------------- culling ------------------ //
+
+function backfaceCulling(vertexA, vertexB, vertexC) {
+  /* determine if face is drawn clockwise or counter-clockwise.
+  returns canDraw bool */
+  let canDraw = true;
+
+  // get the arctangent of vertexA+VertexB.
+  let angleAB = angle(vertexA, vertexB);
+
+  // rotate vertexC by the angle of vertexA/B
+  let newA = rotatePoint(vertexA, angleAB);
+  let newB = rotatePoint(vertexB, angleAB);
+
+  // if upside down, add 180 additional degrees & recalculate
+  if (newB[1] > newA[1]) {
+    angleAB += 180;
+    newA = rotatePoint(vertexA, angleAB);
+    newB = rotatePoint(vertexB, angleAB);
+  }
+
+  const newC = rotatePoint(vertexC, angleAB);
+
+  /* check if vertexC is right or left (which determines of clock/anticlockwise)
+  only draw if to the right. */
+  if (newC[0] < newA[0]) canDraw = false;
+  return canDraw;
+}
+
+function viewFrustrumCulling(vertexA, vertexB, vertexC, vertexD) {
+  let canDraw = true;
+  ;[ vertexA, vertexB, vertexC, vertexD ].forEach(vertex => {
+    const frustrumWidth = (width*vertexA[2]) / ( 0.5 * VIEWING_DISTANCE);
+    const frustrumHeight = (heigth*vertex[2]) / ( 1.5 * VIEWING_DISTANCE);
+
+    if (vertex[0] > frustrumWidth) canDraw = false;
+    else if (vertex[0] < -frustrumWidth) canDraw = false;
+
+    else if (vertex[1] > frustrumHeight) canDraw = false;
+    else if (vertex[1] < -frustrumHeight) canDraw = false;
+
+    else if (vertex[2] > YON_PLANE) canDraw = false;
+    else if (vertex[2] < HITHER_PLANE) canDraw = false;
+  });
+
+  return canDraw;
+}
+
+let occlusionList = [];
+function isInOcclusionList(face) {
+  let isInList = false;
+  const [ a, b, c, d ] = face;
+
+  let aOcc = false;
+  // let bOcc = false;
+  let cOcc = false;
+  // let dOcc = false;
+  occlusionList.forEach(occListFace => {
+    const [ e, f, g, h ] = occListFace;
+    if (a[0] > e[0] && a[1] > e[1]) aOcc = true;
+    if (c[0] < g[0] && c[1] < g[1]) cOcc = true;
+    
+    // if (b[0] > f[0] && b[1] > f[1]) bOcc = true;
+    // if (d[0] < h[0] && d[1] < h[1]) dOcc = true;
+  });
+  // for (let i=0; i<occlusionList.length; i++) {
+  //   const occListFace = occlusionList[i];
+  //   const [ e, f, g, h ] = occListFace;
+  //   if (
+  //     a[0] > e[0] &&
+  //     a[1] > e[1] &&
+  //     c[0] < g[0] &&
+  //     c[1] < g[1]
+  //   ) {
+  //     i = occlusionList.length;
+  //     isInList = true;
+  //   }
+  // }
+
+  // if (aOcc && cOcc) isInList = true;
+  return isInList;
+}
+
+function occlusionCulling(vertexA, vertexB, vertexC, vertexD) {
+  let canDraw = true;
+
+  const face = [
+    [ vertexA[0] | 0, vertexA[1] | 0 ],
+    [ vertexB[0] | 0, vertexB[1] | 0 ],
+    [ vertexC[0] | 0, vertexC[1] | 0 ],
+    [ vertexD[0] | 0, vertexD[1] | 0 ],
+  ];
+
+  const isInList = isInOcclusionList(face);
+  if (isInList) canDraw = false;
+  else occlusionList.push(face);
+
+  return canDraw;
+}
+
+// ---------------------------------------- //
+
+let faceCount = 0;
+function numberToColor(num) {
+  if (num >= 255) return '#ffffff'
+  const base = '0' + (num * 75).toString(16);
+  const short = base.split('').slice(-2).join('');
+  const long = `${short}${short}${short}`;
+  const split = long.split('').slice(0,6).join('');
+  return `#${split}`;
+}
+
+let facesToDraw = [];
+function drawFace(face) {
+  const [ vertexA, vertexB, vertexC, vertexD ] = face;
+  const color = numberToColor(faceCount);
+  faceCount++;
+  // const color = '#000'
+  // intervalLog(color)
+  drawLine(vertexA, vertexB, color);
+  drawLine(vertexB, vertexC, color);
+  drawLine(vertexC, vertexD, color);
+  drawLine(vertexD, vertexA, color);
+  // drawLine(vertexA, vertexB, '#ff0000');
+  // drawLine(vertexB, vertexC, '#ff7700');
+  // drawLine(vertexC, vertexD, '#ffff00');
+  // drawLine(vertexD, vertexA, '#ffffff');
+}
+
+function evalFace(obj, index) {
   obj.faces.forEach(face => {
     let canDraw = true;
     const [ a, b, c, d ] = [ face[0], face[1], face[2], face[3] ];
@@ -360,64 +488,17 @@ function drawFace(obj, index) {
       obj.vertices[c],
       obj.vertices[d],
     ];
-
-    // --------------- Cull back facing --------------- //
-    // determine if face is drawn clockwise or counter-clockwise. //
-
-    // get the arctangent of vertexA+VertexB.
-    let angleAB = angle(vertexA, vertexB);
-
-    // rotate vertexC by the angle of vertexA/B
-    let newA = rotatePoint(vertexA, angleAB);
-    let newB = rotatePoint(vertexB, angleAB);
     
-    if (newB[1] > newA[1]) {
-      // add additional 180 turn around. recalc newA/newB
-      angleAB += 180;
-      newA = rotatePoint(vertexA, angleAB);
-      newB = rotatePoint(vertexB, angleAB);
-    }
-
-    const newC = rotatePoint(vertexC, angleAB);
-    const newD = rotatePoint(vertexD, angleAB);
-    // drawLine(newA, newB, '#ff0000');
-    // drawLine(newB, newC, '#ff7700');
-    // drawLine(newC, newD, '#ffff00');
-    // drawLine(newD, newA, '#ffffff');
-
-    // check if vertexC is right or left (which determines of clock/anticlockwise)
-    // only draw if to the right.
-    if (newC[0] < newA[0]) canDraw = false;
-
-    // ------- only draw if within the frustrum ------- //
-    ;[ vertexA, vertexB, vertexC, vertexD ].forEach(vertex => {
-      const frustrumWidth = (width*vertexA[2]) / ( 0.5 * VIEWING_DISTANCE);
-      const frustrumHeight = (heigth*vertex[2]) / ( 1.5 * VIEWING_DISTANCE);
-
-      if (vertex[0] > frustrumWidth) canDraw = false;
-      else if (vertex[0] < -frustrumWidth) canDraw = false;
-
-      else if (vertex[1] > frustrumHeight) canDraw = false;
-      else if (vertex[1] < -frustrumHeight) canDraw = false;
-
-      else if (vertex[2] > YON_PLANE) canDraw = false;
-      else if (vertex[2] < HITHER_PLANE) canDraw = false;
-    });
+    // --------------- culling --------------- //
+    if (canDraw) canDraw = viewFrustrumCulling(vertexA, vertexB, vertexC, vertexD);
+    if (canDraw) canDraw = backfaceCulling(vertexA, vertexB, vertexC);
+    if (canDraw) canDraw = occlusionCulling(vertexA, vertexB, vertexC, vertexD);
 
     // -------------- perform draw ------------------- //
-    // const color = worldColor[index];
-    let color = '#0000ff'
-    if (newA[0] < newC[0]) color = '#ff0000'
     if (!canDraw) return;
     
-    // drawLine(vertexA, vertexB, color);
-    // drawLine(vertexB, vertexC, color);
-    // drawLine(vertexC, vertexD, color);
-    // drawLine(vertexD, vertexA, color);
-    drawLine(vertexA, vertexB, '#ff0000');
-    drawLine(vertexB, vertexC, '#ff7700');
-    drawLine(vertexC, vertexD, '#ffff00');
-    drawLine(vertexD, vertexA, '#ffffff');
+    facesToDraw.push([ vertexA, vertexB, vertexC, vertexD ]);
+    // drawFace(vertexA, vertexB, vertexC, vertexD)
   });
 }
 
@@ -474,20 +555,29 @@ function loadModel(filename, translate, rotate=[0,0,0], scale) {
 
 function render() {
   clearScreen();
-
+  occlusionList = [];
+  facesToDraw = [];
+  faceCount = 0;
 
   // ----------------- world space ----------------- //
   // rotate world
-  const rotWorldMat = new EulerMatrix(radians(0), radians(1), radians(0));
+  const rotWorldMat = new EulerMatrix(radians(0), radians(0.25), radians(0));
   world.forEach((item, idx) => {
     world[idx].vertices = rotWorldMat.transform(item.vertices);
   });
 
-  const renderWorld = cloneWorld(world);
+  let renderWorld = cloneWorld(world);
+
+  // simple sort world
+  renderWorld = renderWorld.sort((a,b) => {
+    const one = (a && a[0] && a[0][2]);
+    const two = (b && b[0] && b[0][2]);
+    return one - two;
+  });
 
   // ----------------- camera space ----------------- //
   // move world
-  const moveWorld = new TranslationMatrix(0,0,180); // 180
+  const moveWorld = new TranslationMatrix(0,0,100); // 180
   renderWorld.forEach((item, idx) => {
     renderWorld[idx].vertices = moveWorld.transform(item.vertices);
   });
@@ -504,8 +594,24 @@ function render() {
 
   // draw world
   renderWorld.forEach((item, idx) => {
-    drawFace(item, idx);
+    evalFace(item, idx);
+  });
+
+  // get face depth
+  facesToDraw.forEach(face => {
+    const avg = face.reduce((acc, vertex) => (acc + vertex[2]), 0);
+    face.push(avg);
+  });
+
+  // sort faces
+  facesToDraw.sort((a, b) => {
+    return a[4] - b[4];
   })
+
+  intervalLog(facesToDraw)
+
+  // draw faces
+  facesToDraw.forEach(drawFace);
 }
 
 function clock() {
@@ -526,29 +632,31 @@ function main() {
   // });
   loadModel('cube.json', [0,0,0], [0,0,0], [10,10,10]).then(mCube => {
     world.push(mCube);
-    worldColor.push('#f00');
     console.log(mCube)
 
     const mCube1 = Object.assign({}, mCube);
-    mCube1.vertices = new TranslationMatrix(100,0,0).transform(mCube.vertices);
+    mCube1.vertices = new TranslationMatrix(20,0,0).transform(mCube.vertices);
     world.push(mCube1);
-    worldColor.push('#0f0');
 
-    const mCube2 = Object.assign({}, mCube);
-    mCube2.vertices = new TranslationMatrix(0,100,0).transform(mCube.vertices);
-    world.push(mCube2);
-    worldColor.push('#00f');
+    // const mCube2 = Object.assign({}, mCube);
+    // mCube2.vertices = new TranslationMatrix(0,20,0).transform(mCube.vertices);
+    // world.push(mCube2);
 
-    const mCube3 = Object.assign({}, mCube);
-    mCube3.vertices = new TranslationMatrix(0,0,100).transform(mCube.vertices);
-    world.push(mCube3);
-    worldColor.push('#0ff');
+    // const mCube3 = Object.assign({}, mCube);
+    // mCube3.vertices = new TranslationMatrix(0,0,20).transform(mCube.vertices);
+    // world.push(mCube3);
 
-    const mCube4 = Object.assign({}, mCube);
-    mCube4.vertices = new TranslationMatrix(0,-100,0).transform(mCube.vertices);
-    world.push(mCube4);
-    worldColor.push('#ff0');
+    // const mCube4 = Object.assign({}, mCube);
+    // mCube4.vertices = new TranslationMatrix(0,-20,0).transform(mCube.vertices);
+    // world.push(mCube4);
 
+    // const mCube5 = Object.assign({}, mCube);
+    // mCube5.vertices = new TranslationMatrix(-20,0,0).transform(mCube.vertices);
+    // world.push(mCube5);
+
+    // const mCube6 = Object.assign({}, mCube);
+    // mCube6.vertices = new TranslationMatrix(0,0,-20).transform(mCube.vertices);
+    // world.push(mCube6);
     // start
   });
   
