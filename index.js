@@ -397,38 +397,75 @@ function viewFrustrumCulling(vertexA, vertexB, vertexC, vertexD) {
   return canDraw;
 }
 
+// todo: test if a single point is inside a face.
+// then do the test for all 4 points
+
 let occlusionList = [];
 function isInOcclusionList(face) {
   let isInList = false;
   const [ a, b, c, d ] = face;
+  const pointInOcclusionList = point => {
+    const [ x, y ] = point;
+    let pointInList = false;
 
-  let aOcc = false;
-  // let bOcc = false;
-  let cOcc = false;
-  // let dOcc = false;
-  occlusionList.forEach(occListFace => {
-    const [ e, f, g, h ] = occListFace;
-    if (a[0] > e[0] && a[1] > e[1]) aOcc = true;
-    if (c[0] < g[0] && c[1] < g[1]) cOcc = true;
-    
-    // if (b[0] > f[0] && b[1] > f[1]) bOcc = true;
-    // if (d[0] < h[0] && d[1] < h[1]) dOcc = true;
-  });
-  // for (let i=0; i<occlusionList.length; i++) {
-  //   const occListFace = occlusionList[i];
-  //   const [ e, f, g, h ] = occListFace;
-  //   if (
-  //     a[0] > e[0] &&
-  //     a[1] > e[1] &&
-  //     c[0] < g[0] &&
-  //     c[1] < g[1]
-  //   ) {
-  //     i = occlusionList.length;
-  //     isInList = true;
-  //   }
-  // }
+    occlusionList.forEach(vector => {
+      if (pointInList) return;
+      const [ oA, oB, oC, oD ] = vector;
 
-  // if (aOcc && cOcc) isInList = true;
+      // if x/y shares the same point, it is 'inside' the trapazoid
+      if (
+        x === oA[0] || x === oB[0] || x === oC[0] || x === oD[0] ||
+        y === oA[1] || y === oB[1] || y === oC[1] || y === oD[1]
+      ) {
+        pointInList = true;
+        return;
+      }
+
+      // using averaging to determine. less accurate but easy.
+      // turns into a flat rectangle to compare point to. No perspective.
+      const left = Math.min(oA[0], oB[0], oC[0], oD[0]);
+      const right = Math.max(oA[0], oB[0], oC[0], oD[0]);
+      const top = Math.max(oA[1], oB[1], oC[1], oD[1]);
+      const bottom = Math.min(oA[1], oB[1], oC[1], oD[1]);
+
+      // const oWidth = oC[0] - oA[0];
+      // const width = (x - oA[0]) + (oC[0] - x);
+
+      // const oHeigth = oC[1] - oA[1];
+      // const heigth = (y - oA[1]) + (oC[1] - y);
+      // if (
+      //   oWidth - width === 0 &&
+      //   oHeigth - heigth === 0
+      // ) pointInList = true;
+      // intervalLog(oC[0], oA[0], x);
+
+      // if (
+      //   x >= left &&
+      //   x <= right
+      // ) {
+      //   pointInList = true;
+      // }
+
+      if (
+        x >= left &&
+        x <= right &&
+        y >= top &&
+        y <= bottom
+      ) {
+        pointInList = true;
+      }
+    });
+
+    return pointInList;
+  }
+
+  const aOcc = pointInOcclusionList(a);
+  const bOcc = pointInOcclusionList(b);
+  const cOcc = pointInOcclusionList(c);
+  const dOcc = pointInOcclusionList(d);
+
+  if (aOcc && bOcc && cOcc && dOcc) isInList = true;
+
   return isInList;
 }
 
@@ -478,6 +515,8 @@ function drawFace(face) {
   // drawLine(vertexD, vertexA, '#ffffff');
 }
 
+// function cullFace(vertexA, vertexB, vertexC, vertexD)
+
 function evalFace(obj, index) {
   obj.faces.forEach(face => {
     let canDraw = true;
@@ -498,7 +537,6 @@ function evalFace(obj, index) {
     if (!canDraw) return;
     
     facesToDraw.push([ vertexA, vertexB, vertexC, vertexD ]);
-    // drawFace(vertexA, vertexB, vertexC, vertexD)
   });
 }
 
@@ -592,7 +630,17 @@ function render() {
     });
   });
 
-  // draw world
+  // ----------------- draw world ----------------- //
+  intervalLog(renderWorld)
+
+  // sort world objects via the center of each object. from front to back
+  // renderWorld.sort((a, b) => {
+  //   const avgA = a.vertices.reduce((acc, vertex) => (acc + vertex[2]), 0);
+  //   const avgB = b.vertices.reduce((acc, vertex) => (acc + vertex[2]), 0);
+  //   return a - b;
+  // });
+  // renderWorld.reverse();
+
   renderWorld.forEach((item, idx) => {
     evalFace(item, idx);
   });
@@ -606,9 +654,8 @@ function render() {
   // sort faces
   facesToDraw.sort((a, b) => {
     return a[4] - b[4];
-  })
-
-  intervalLog(facesToDraw)
+  });
+  // facesToDraw.reverse();
 
   // draw faces
   facesToDraw.forEach(drawFace);
