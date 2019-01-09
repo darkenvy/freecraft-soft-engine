@@ -319,7 +319,8 @@ function drawLine(xy1, xy2, color) {
 
 function clearScreen() {
   for (let i = 0; i < width * heigth; i++) {
-    pixels.data[i * 4 + 3] = 50;
+    // pixels.data[i * 4 + 3] = 50;
+    pixels.data[i * 4 + 3] = 0;
   }
 }
 
@@ -401,63 +402,41 @@ function viewFrustrumCulling(vertexA, vertexB, vertexC, vertexD) {
 // then do the test for all 4 points
 
 let occlusionList = [];
+const pointInOcclusionList = point => {
+  const [ x, y ] = point;
+  let pointInList = false;
+
+  occlusionList.forEach(vector => {
+    if (pointInList) return;
+    const [ oA, oB, oC, oD ] = vector;
+
+    // if x/y shares the same point, it is 'inside' the trapazoid
+    if (x === oA[0] && y === oA[1]) pointInList = true;
+    else if (x === oB[0] && y === oB[1]) pointInList = true;
+    else if (x === oC[0] && y === oC[1]) pointInList = true;
+    else if (x === oD[0] && y === oD[1]) pointInList = true;
+
+    if (pointInList) return;
+
+    // using averaging to determine. less accurate but easy.
+    // turns into a flat rectangle to compare point to. No perspective.
+    const left = Math.min(oA[0], oB[0], oC[0], oD[0]);
+    const right = Math.max(oA[0], oB[0], oC[0], oD[0]);
+    const top = Math.max(oA[1], oB[1], oC[1], oD[1]);
+    const bottom = Math.min(oA[1], oB[1], oC[1], oD[1]);
+
+    if (
+      x >= left && x <= right &&
+      y >= bottom && y <= top
+    ) pointInList = true;
+  });
+
+  return pointInList;
+}
+
 function isInOcclusionList(face) {
   let isInList = false;
   const [ a, b, c, d ] = face;
-  const pointInOcclusionList = point => {
-    const [ x, y ] = point;
-    let pointInList = false;
-
-    occlusionList.forEach(vector => {
-      if (pointInList) return;
-      const [ oA, oB, oC, oD ] = vector;
-
-      // if x/y shares the same point, it is 'inside' the trapazoid
-      if (
-        x === oA[0] || x === oB[0] || x === oC[0] || x === oD[0] ||
-        y === oA[1] || y === oB[1] || y === oC[1] || y === oD[1]
-      ) {
-        pointInList = true;
-        return;
-      }
-
-      // using averaging to determine. less accurate but easy.
-      // turns into a flat rectangle to compare point to. No perspective.
-      const left = Math.min(oA[0], oB[0], oC[0], oD[0]);
-      const right = Math.max(oA[0], oB[0], oC[0], oD[0]);
-      const top = Math.max(oA[1], oB[1], oC[1], oD[1]);
-      const bottom = Math.min(oA[1], oB[1], oC[1], oD[1]);
-
-      // const oWidth = oC[0] - oA[0];
-      // const width = (x - oA[0]) + (oC[0] - x);
-
-      // const oHeigth = oC[1] - oA[1];
-      // const heigth = (y - oA[1]) + (oC[1] - y);
-      // if (
-      //   oWidth - width === 0 &&
-      //   oHeigth - heigth === 0
-      // ) pointInList = true;
-      // intervalLog(oC[0], oA[0], x);
-
-      // if (
-      //   x >= left &&
-      //   x <= right
-      // ) {
-      //   pointInList = true;
-      // }
-
-      if (
-        x >= left &&
-        x <= right &&
-        y >= top &&
-        y <= bottom
-      ) {
-        pointInList = true;
-      }
-    });
-
-    return pointInList;
-  }
 
   const aOcc = pointInOcclusionList(a);
   const bOcc = pointInOcclusionList(b);
@@ -488,23 +467,18 @@ function occlusionCulling(vertexA, vertexB, vertexC, vertexD) {
 
 // ---------------------------------------- //
 
-let faceCount = 0;
-function numberToColor(num) {
-  if (num >= 255) return '#ffffff'
-  const base = '0' + (num * 75).toString(16);
+function numberToColor(num, max) {
+  const base = '0' + (num * (200/max)).toString(16);
   const short = base.split('').slice(-2).join('');
   const long = `${short}${short}${short}`;
   const split = long.split('').slice(0,6).join('');
   return `#${split}`;
 }
 
-let facesToDraw = [];
-function drawFace(face) {
+function drawFace(face, idx, max) {
   const [ vertexA, vertexB, vertexC, vertexD ] = face;
-  const color = numberToColor(faceCount);
-  faceCount++;
+  const color = numberToColor(idx, max);
   // const color = '#000'
-  // intervalLog(color)
   drawLine(vertexA, vertexB, color);
   drawLine(vertexB, vertexC, color);
   drawLine(vertexC, vertexD, color);
@@ -515,11 +489,20 @@ function drawFace(face) {
   // drawLine(vertexD, vertexA, '#ffffff');
 }
 
-// function cullFace(vertexA, vertexB, vertexC, vertexD)
+function cullFace(vertexA, vertexB, vertexC, vertexD) {
+  let canDraw = true;
+  // --------------- culling --------------- //
+  // if (canDraw) canDraw = viewFrustrumCulling(vertexA, vertexB, vertexC, vertexD);
+  if (canDraw) canDraw = occlusionCulling(vertexA, vertexB, vertexC, vertexD);
+  // if (canDraw) canDraw = backfaceCulling(vertexA, vertexB, vertexC);
 
-function evalFace(obj, index) {
+  return canDraw;
+}
+
+function constructFaces(obj, index) {
+  const faces = [];
+
   obj.faces.forEach(face => {
-    let canDraw = true;
     const [ a, b, c, d ] = [ face[0], face[1], face[2], face[3] ];
     const [ vertexA, vertexB, vertexC, vertexD ] = [
       obj.vertices[a],
@@ -528,16 +511,10 @@ function evalFace(obj, index) {
       obj.vertices[d],
     ];
     
-    // --------------- culling --------------- //
-    if (canDraw) canDraw = viewFrustrumCulling(vertexA, vertexB, vertexC, vertexD);
-    if (canDraw) canDraw = backfaceCulling(vertexA, vertexB, vertexC);
-    if (canDraw) canDraw = occlusionCulling(vertexA, vertexB, vertexC, vertexD);
-
-    // -------------- perform draw ------------------- //
-    if (!canDraw) return;
-    
-    facesToDraw.push([ vertexA, vertexB, vertexC, vertexD ]);
+    faces.push([ vertexA, vertexB, vertexC, vertexD ]);
   });
+
+  return faces;
 }
 
 function safeParse(str) {
@@ -594,8 +571,6 @@ function loadModel(filename, translate, rotate=[0,0,0], scale) {
 function render() {
   clearScreen();
   occlusionList = [];
-  facesToDraw = [];
-  faceCount = 0;
 
   // ----------------- world space ----------------- //
   // rotate world
@@ -631,34 +606,33 @@ function render() {
   });
 
   // ----------------- draw world ----------------- //
-  intervalLog(renderWorld)
 
-  // sort world objects via the center of each object. from front to back
-  // renderWorld.sort((a, b) => {
-  //   const avgA = a.vertices.reduce((acc, vertex) => (acc + vertex[2]), 0);
-  //   const avgB = b.vertices.reduce((acc, vertex) => (acc + vertex[2]), 0);
-  //   return a - b;
-  // });
-  // renderWorld.reverse();
-
+  let facesToDraw = [];
   renderWorld.forEach((item, idx) => {
-    evalFace(item, idx);
-  });
-
-  // get face depth
-  facesToDraw.forEach(face => {
-    const avg = face.reduce((acc, vertex) => (acc + vertex[2]), 0);
-    face.push(avg);
+    const faces = constructFaces(item, idx);
+    facesToDraw = Array.prototype.concat(facesToDraw, faces);
   });
 
   // sort faces
   facesToDraw.sort((a, b) => {
-    return a[4] - b[4];
+    const avgA = a.reduce((acc, curr) => acc + curr[2],0);
+    const avgB = b.reduce((acc, curr) => acc + curr[2],0);
+    return avgA - avgB;
   });
-  // facesToDraw.reverse();
+
+  facesToDraw.forEach((face, idx) => face.push(idx));
+
+  facesToDraw = facesToDraw.filter(face => {
+    const [ vertexA, vertexB, vertexC, vertexD ] = face;
+    return cullFace(vertexA, vertexB, vertexC, vertexD);
+  });
+
+  intervalLog(facesToDraw)
 
   // draw faces
-  facesToDraw.forEach(drawFace);
+  facesToDraw.forEach((face, idx) => {
+    drawFace(face, idx, facesToDraw.length);
+  });
 }
 
 function clock() {
