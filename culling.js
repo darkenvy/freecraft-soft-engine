@@ -1,6 +1,6 @@
-let occlusionList = []; // eslint-disable-line
+let occlusionList = []; // need to make sharable with rest of component 
 const VIEWING_DISTANCE = 200;
-const HITHER_PLANE = 5;
+const HITHER_PLANE = 0.1;
 const YON_PLANE = 400;
 
 function radians(degrees) {
@@ -35,10 +35,10 @@ function rotatePoint(xy, degrees) {
 
 function cullFace(vertexA, vertexB, vertexC, vertexD) {
   let canDraw = true;
-  // --------------- culling --------------- //
-  // if (canDraw) canDraw = viewFrustrumCulling(vertexA, vertexB, vertexC, vertexD);
-  if (canDraw) canDraw = occlusionCulling(vertexA, vertexB, vertexC, vertexD);
-  // if (canDraw) canDraw = backfaceCulling(vertexA, vertexB, vertexC);
+  // culling. Once we determine we shouldn't draw, we don't need to check again.
+  if (canDraw) canDraw = backfaceCulling(vertexA, vertexB, vertexC);
+  // if (canDraw) canDraw = occlusionCulling(vertexA, vertexB, vertexC, vertexD);
+  if (canDraw) canDraw = viewFrustrumCulling(vertexA, vertexB, vertexC, vertexD);
 
   return canDraw;
 }
@@ -76,9 +76,13 @@ function backfaceCulling(vertexA, vertexB, vertexC) {
 // frustrum
 function viewFrustrumCulling(vertexA, vertexB, vertexC, vertexD) {
   let canDraw = true;
-  ;[ vertexA, vertexB, vertexC, vertexD ].forEach(vertex => {
+  ;[ vertexA, vertexB, vertexC, vertexD ].forEach((vertex, idx) => {
     const frustrumWidth = (width*vertexA[2]) / ( 0.5 * VIEWING_DISTANCE);
     const frustrumHeight = (heigth*vertex[2]) / ( 1.5 * VIEWING_DISTANCE);
+    
+    // const drawLineX = parseInt(frustrumWidth / 10, 10);
+    // const drawLineY = parseInt(idx, 10);
+    // drawLine([-drawLineX, -110], [drawLineX, -110], '#ff0000');
 
     if (vertex[0] > frustrumWidth) canDraw = false;
     else if (vertex[0] < -frustrumWidth) canDraw = false;
@@ -141,6 +145,8 @@ function isInOcclusionList(face) {
 }
 
 function occlusionCulling(vertexA, vertexB, vertexC, vertexD) {
+  /* note: occlusion culling would need to be aware of frustrum (or taken consideration of).
+  without, any object behind the frustrum would make the object in the frustrum occluded */
   let canDraw = true;
 
   const face = [

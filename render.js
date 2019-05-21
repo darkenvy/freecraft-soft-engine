@@ -58,7 +58,8 @@ function render() {
 
   // ----------------- camera space ----------------- //
   // move world
-  const moveWorld = new TranslationMatrix(0,0,100); // 180
+  // const moveWorld = new TranslationMatrix(0,0,100); // 180
+  const moveWorld = new TranslationMatrix(pposx, pposy, pposz);
   renderWorld.forEach((item, idx) => {
     renderWorld[idx].vertices = moveWorld.transform(item.vertices);
   });

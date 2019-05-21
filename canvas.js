@@ -43,8 +43,8 @@ function clearScreen() {
 
 function drawFace(face, idx, max) {
   const [ vertexA, vertexB, vertexC, vertexD ] = face;
-  const color = debug.constructor.numberToColor(idx, max);
-  // const color = '#000'
+  // const color = debug.constructor.numberToColor(idx, max);
+  const color = '#000'
   drawLine(vertexA, vertexB, color);
   drawLine(vertexB, vertexC, color);
   drawLine(vertexC, vertexD, color);

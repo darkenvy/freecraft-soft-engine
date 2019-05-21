@@ -23,6 +23,9 @@ const requestAnimFrame = (
 function clock() {
   // fps counter
   debug.tickFPS();
+
+  // calculate world movement based on key presses
+  movementLoop();
   
   // wait for ready. put image then restart
   requestAnimFrame(clock);
@@ -42,6 +45,56 @@ function main() {
     const mCube1 = Object.assign({}, mCube);
     mCube1.vertices = new TranslationMatrix(20,0,0).transform(mCube.vertices);
     world.push(mCube1);
+
+
+    // // floor
+    // for (let xi=-5; xi<5; xi++) {
+    //   for (let zi=-5; zi<5; zi++) {
+    //     const genCube = Object.assign({}, mCube);
+    //     genCube.vertices = new TranslationMatrix(zi*20,-20,xi*20).transform(mCube.vertices);
+    //     world.push(genCube);
+    //   }
+    // }
+
+    // // ceiling
+    // for (let xi=-5; xi<5; xi++) {
+    //   for (let zi=-5; zi<5; zi++) {
+    //     const genCube = Object.assign({}, mCube);
+    //     genCube.vertices = new TranslationMatrix(zi*20,80,xi*20).transform(mCube.vertices);
+    //     world.push(genCube);
+    //   }
+    // }
+
+    // // ceiling 2 (to mostly be occluded)
+    // for (let xi=-5; xi<5; xi++) {
+    //   for (let zi=-5; zi<5; zi++) {
+    //     const genCube = Object.assign({}, mCube);
+    //     genCube.vertices = new TranslationMatrix(zi*20,100,xi*20).transform(mCube.vertices);
+    //     world.push(genCube);
+    //   }
+    // }
+
+    // // ceiling 3 (to mostly be occluded)
+    // for (let xi=-5; xi<5; xi++) {
+    //   for (let zi=-5; zi<5; zi++) {
+    //     const genCube = Object.assign({}, mCube);
+    //     genCube.vertices = new TranslationMatrix(zi*20,120,xi*20).transform(mCube.vertices);
+    //     world.push(genCube);
+    //   }
+    // }
+
+    // // back wall
+    // for (let xi=-5; xi<5; xi++) {
+    //   for (let yi=0; yi<5; yi++) {
+    //     const genCube = Object.assign({}, mCube);
+    //     genCube.vertices = new TranslationMatrix(-120,yi*20,xi*20).transform(mCube.vertices);
+    //     world.push(genCube);
+    //   }
+    // }
+
+
+
+
 
     // const mCube2 = Object.assign({}, mCube);
     // mCube2.vertices = new TranslationMatrix(0,20,0).transform(mCube.vertices);
@@ -67,6 +120,10 @@ function main() {
   
   clock();
   console.log('started clock');
+  
+  addKeyboardBindings();
+  // setTimeout(() => {
+  // }, 250)
 }
 
 main();
